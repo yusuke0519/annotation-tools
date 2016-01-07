@@ -1,0 +1,7 @@
+# # -*- coding: utf-8 -*-
+
+ERROR = "ERROR"
+WARNING = "WARNING"
+DONE = "DONE"
+
+ANNOTATION_STATUS = [DONE, WARNING, ERROR]

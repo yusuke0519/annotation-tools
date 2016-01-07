@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block body %}
+  <div class="panel panel-default">
+    <div class="panel-heading">
+      <h3 class="panel-title">
+      <a href="#">Lines <span class="badge">{{results|length}}</span></a>
+      <a href="#">Success <span class="badge">{{results|length}}</span></a>
+      <a href="#">Errors <span class="badge">{{results|length}}</span></a>
+      <a href="#">Warnings <span class="badge">{{results|length}}</span></a>
+      </h3>
+    </div>
+    <div class="panel-body results">
+      <table class="table table-hover table-condensed">
+        <tr><th align='right' width="30">#</th><th align='left'>line.</th></tr>
+        {% for result in results %}
+          {% if result.status=='OK' %}
+            <tr><td align='left' width="30">{{result.index }}</td><td align='left'>{{result.line }} </td></tr>
+          {% elif result.status=='ERROR' %}
+            <tr class='danger'><td align='left' width="30">{{result.index }}</td><td align='left'>{{result.line }} </td></tr>
+          {% endif %}
+        {% else %}
+          <li><em>Unbelievable.  No entries here so far</em>
+        {% endfor %}
+
+      </table>
+
+    </div>
+  </div>
+{% endblock %}
