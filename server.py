@@ -13,7 +13,7 @@ from werkzeug import secure_filename
 app = Flask(__name__)
 
 # This is the path to the upload directory
-app.config['UPLOAD_FOLDER'] = 'uploads/'
+app.config['UPLOAD_FOLDER'] = '/tmp/'
 # These are the extension that we are accepting to be uploaded
 app.config['ALLOWED_EXTENSIONS'] = set(['txt', 'csv'])
 
@@ -62,11 +62,13 @@ def uploaded_file(filename):
         print("File is exist")
     else:
         print("File (%s) doesn't exist" % (file_fullpath))
+        return file_fullpath
 
     checker = Checker(app.config['UPLOAD_FOLDER'] + filename)
     checker.check()
 
     return checker.results.as_string()
+
 
 if __name__ == '__main__':
     app.run(
