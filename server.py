@@ -57,6 +57,12 @@ def upload():
 # an image, that image is going to be show after the upload
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
+    file_fullpath = app.config['UPLOAD_FOLDER'] + filename
+    if os.path.exists(file_fullpath):
+        print("File is exist")
+    else:
+        print("File (%s) doesn't exist" % (file_fullpath))
+
     checker = Checker(app.config['UPLOAD_FOLDER'] + filename)
     checker.check()
 
