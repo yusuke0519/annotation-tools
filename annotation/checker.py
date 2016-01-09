@@ -67,13 +67,13 @@ class Checker(object):
 
     def compatible_validation_with_correct_labeles(self, i, line, error_list):
         #
-        # 1. miss correct label
-        # 2. miss test label
-        # 
+        # 1. check missing an action
+        # 2. check difference between test label's time and correct label's time
+        #
         start_errors = []
         finish_errors = []
-        check_start = False # initialize start time's error size tag
-        check_finish = False # initialize finish time's error size tag
+        check_start = False  # initialize start time's big error tag
+        check_finish = False  # initialize finish time's big error tag
 
         for correct_i, correct_line in enumerate(self.correct_data):
             if line[0] == correct_line[0]:
@@ -118,8 +118,8 @@ class Checker(object):
         for error in error_list:
             if err_range[1] < abs(error[1]):
                 if error[1] <= 0:
-                message = 'you missed a action before %0.3f second from this start time'%abs(error[1])
-                self.results.append((error[0], error[2], params.WARNING, message))
+                    message = 'you missed a action before %0.3f second from this start time'%abs(error[1])
+                    self.results.append((error[0], error[2], params.WARNING, message))
             else:
                 message = 'you missed a action after %0.3f second from this start time'%abs(error[1])
                 self.results.append((error[0], error[2], params.WARNING, message))
