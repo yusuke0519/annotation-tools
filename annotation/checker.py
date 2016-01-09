@@ -1,6 +1,7 @@
 # # -*- coding: utf-8 -*-
 from identifier import get_IDs_from_path
 import params
+import numpy as np
 
 config = {}
 config['N_COLUMNS'] = 4
@@ -10,7 +11,7 @@ config['header'] = 'labelname,start,stop,comment'
 # err_range[0] is acceptable error
 # err_range[1] is un-acceptable error
 err_range = [123456, 123412345]
-correct_path = 'sdfgyu.csv'
+correct_path = 'exp1-sub9.txt'
 
 
 class Checker(object):
@@ -29,18 +30,20 @@ class Checker(object):
 
     def check(self):
         print("Start checking...")
-        error_list = np.ones(len(self.correct_data), 3) * 1000
+        error_list = np.ones((len(self.correct_data), 3)) * 1000
+        error_list = error_list.tolist()
         for i, line in enumerate(self.contents):
             error_list = self._check_eachline(i, line, error_list)
-        check_miss_labels(error_list)
+        self.check_miss_labels(error_list)
         print("Done")
 
     def _load_file(self, path):
         return open(path).read().split('\n')
 
     def _check_eachline(self, i, line, error_list):
-        self.line_format_check(i, line)
-        error_list = self.compatible_validation_with_correct_labeles(i, line, error_list)
+        check_tag = self.line_format_check(i, line)
+        if check_tag:
+                    error_list = self.compatible_validation_with_correct_labeles(i, line, error_list)
         return error_list
 
     def line_format_check(self, i, line):
@@ -53,17 +56,43 @@ class Checker(object):
         # Heare is example of 1. the number of columns
         # TODO: May by you need to separete each validation on other file
         # so that we can easily call it (and keep the source simple)
-        nb_cols = len(line.split(','))
-        if len(line.split(',')) != config["N_COLUMNS"]:
-            message = "#column should be %d, detected %d" % (
-                config["N_COLUMNS"], nb_cols)
+
+        # nb_cols = len(temp_line)
+        # if nb_cols != config["N_COLUMNS"]:
+        #     message = "#column should be %d, detected %d" % (
+        #         config["N_COLUMNS"], nb_cols)
+        #     self.results.append((i, line, params.ERROR, message))
+
+        # check the format of columns
+        if ',,' in line:
+            message = "[,,] changes [,]"
             self.results.append((i, line, params.ERROR, message))
-        # check e.g(2)
-        line = line.split(',')
-        if float(line[1]) >= float(line[2]):
+            return False
+        if ',,,' in line:
+            message = "[,,,] changes [,]"
+            self.results.append((i, line, params.ERROR, message))
+            return False
+
+        temp_line = line.split(',')
+
+        # check the number of columns
+        if not len(temp_line) in [3, 4, 5]:
+            message = "#column should be %d, detected %d" % (
+                config["N_COLUMNS"], len(temp_line))
+            self.results.append((i, line, params.ERROR, message))
+            return False
+
+        # check the format of time
+        check_tag, temp_line = self.split_line(i, line)
+        if check_tag:
+            return False
+
+        # check difference between fin time and start time
+        if float(temp_line[1]) >= float(temp_line[2]):
             message = "start time is later stop time"
             self.results.append((i, line, params.ERROR, message))
-
+            return False
+        return True
 
     def compatible_validation_with_correct_labeles(self, i, line, error_list):
         #
@@ -75,17 +104,23 @@ class Checker(object):
         check_start = False  # initialize start time's big error tag
         check_finish = False  # initialize finish time's big error tag
 
+        check_tag, temp_line = self.split_line(i, line)
+
         for correct_i, correct_line in enumerate(self.correct_data):
-            if line[0] == correct_line[0]:
-                start_error = line[1] - correct_line[1]
+            check_tag, temp_correct_line = self.split_line(correct_i, correct_line)
+            if temp_line[0] == temp_correct_line[0]:
+                start_error = temp_line[1] - temp_correct_line[1]
                 start_errors.append(start_error)
-                finish_error = line[2] - correct_line[2]
+                finish_error = temp_line[2] - temp_correct_line[2]
                 finish_errors.append(finish_error)
                 if abs(error_list[correct_i][1]) > abs(start_error):
                     # update error_list to minimum value
                     error_list[correct_i][0] = i
                     error_list[correct_i][1] = start_error
                     error_list[correct_i][2] = line
+
+        start_errors = np.array(start_errors)
+        finish_errors = np.array(finish_errors)
 
         min_abs_time = min(abs(start_errors))
         if err_range[0] < min_abs_time < err_range[1]:
@@ -114,15 +149,42 @@ class Checker(object):
     def _load_correctly_labeled_data(self):
         return open(correct_path).read().split('\n')
         # raise Exception("The method is not implemented yet")
+
     def check_miss_labels(self, error_list):
         for error in error_list:
             if err_range[1] < abs(error[1]):
                 if error[1] <= 0:
                     message = 'you missed a action before %0.3f second from this start time'%abs(error[1])
                     self.results.append((error[0], error[2], params.WARNING, message))
-            else:
-                message = 'you missed a action after %0.3f second from this start time'%abs(error[1])
-                self.results.append((error[0], error[2], params.WARNING, message))
+                else:
+                    message = 'you missed a action after %0.3f second from this start time'%abs(error[1])
+                    self.results.append((error[0], error[2], params.WARNING, message))
+
+    def convert_timeexpression(self, time):
+        # >>> time = '1:0:0'
+        # >>> convert_timeexpression(time)
+        # 60.0
+        # >>> time = '0:0:30'
+        # >>> convert_timeexpression(time)
+        # 1.0
+        m = int(time.split(':')[0])
+        s = int(time.split(':')[1])
+        f = int(time.split(':')[2])
+        return m * 60 + s + f / 30.0  # do not divide by 30
+
+    def split_line(self, i, line):
+        line = line.split(',')
+        if (len(line[1]) != 8) or (line[1].count(":") != 2):
+            message = "the format of start time must be mm:ss:ff"
+            self.results.append((i, line, params.ERROR, message))
+            return True, line
+        if (len(line[2]) != 8) or (line[2].count(":") != 2):
+            message = "the format of finish time must be mm:ss:ff"
+            self.results.append((i, line, params.ERROR, message))
+            return True, line
+        line[1] = self.convert_timeexpression(line[1])
+        line[2] = self.convert_timeexpression(line[2])
+        return False, line
 
 
 
