@@ -84,8 +84,20 @@ def get_filename(expID, userID):
 
 
 def get_IDs_from_path(path):
-    return [int(x)
-            for x in path.replace("exp", "").replace("sub", "").split("-")]
+    return [x for x in path.replace("exp", "").replace("sub", "").split("-")]
+
+
+def allowed_prefix(prefix):
+    flag = True
+    IDs = get_IDs_from_path(prefix)
+    if len(IDs) != 2:
+        return False
+
+    flag = flag and (get_expname(int(IDs[0])))
+    print(get_expname(IDs[0]))
+    flag = flag and (get_username(int(IDs[1])))
+
+    return flag
 
 
 if __name__ == '__main__':
