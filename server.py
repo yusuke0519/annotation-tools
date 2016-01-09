@@ -1,5 +1,6 @@
 # # -*- coding: utf-8 -*-
 from annotation.checker import Checker
+from annotation.identifier import allowed_prefix
 import os
 # We'll render HTML templates and access data sent by POST
 # using the request object from flask. Redirect and url_for
@@ -13,7 +14,9 @@ from werkzeug import secure_filename
 app = Flask(__name__)
 
 # This is the path to the upload directory
-app.config['UPLOAD_FOLDER'] = '/tmp/'
+app.config['UPLOAD_FOLDER'] = '/tmp/annotation/'
+if os.path.exists(app.config['UPLOAD_FOLDER']) is False:
+    os.mkdir(app.config['UPLOAD_FOLDER'])
 # These are the extension that we are accepting to be uploaded
 app.config['ALLOWED_EXTENSIONS'] = set(['txt', 'csv'])
 
@@ -32,13 +35,33 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/qa')
+def qa():
+    return render_template('qa.html')
+
+
 # Route that will process the file upload
 @app.route('/upload', methods=['POST'])
 def upload():
     # Get the name of the uploaded file
     file = request.files['file']
-    # Check if the file is one of the allowed types/extensions
-    if file and allowed_file(file.filename):
+    # Check if the file is one of the allowed types/extensionss
+    if not file:
+        err_msg = "Error: The file must be .txt or .csv"
+        return render_template("results.html", msg=err_msg)
+
+    if not allowed_file(file.filename):
+        err_msg = "Error: The file must be .txt or .csv"
+        return render_template("results.html", msg=err_msg)
+    if not allowed_prefix(file.filename.split('.')[0]):
+        err_msg = """
+<pre>Error: The file prefix must be the same with video prefix
+I.e., the file name must be look like 'exp1-sub1.csv' or 'exp1-sub1.txt'
+</pre>
+"""
+        return render_template("results.html", msg=err_msg)
+
+    if file:
         # Make the filename safe, remove unsupported chars
         filename = secure_filename(file.filename)
         # Move the file form the temporal folder to
@@ -48,7 +71,6 @@ def upload():
         # will basicaly show on the browser the uploaded file
         return redirect(url_for('uploaded_file',
                                 filename=filename))
-    return "Error: The file must be .txt or .csv"
 
 
 # This route is expecting a parameter containing the name
@@ -66,8 +88,9 @@ def uploaded_file(filename):
 
     checker = Checker(app.config['UPLOAD_FOLDER'] + filename)
     checker.check()
-
-    return checker.results.as_string()
+    msg = checker.results.as_string(lfc='\n')
+    msg = '<pre>' + msg + '</pre>'
+    return render_template("results.html", msg=msg)
 
 
 if __name__ == '__main__':

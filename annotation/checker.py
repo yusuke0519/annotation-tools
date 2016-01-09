@@ -77,6 +77,9 @@ Please send a final version to iwasawa@weblab.t.u-tokyo.ac.jp.
         else:
             return lfc.join([self._format_line(x) for x in self.msg_lines])
 
+    def as_raw(self):
+        return self.msg_lines()
+
     def _format_line(self, line):
         return "{status} (at line {i}, {content}): {message}".format(
             status=line[2], message=line[3], i=line[0], content=line[1])
