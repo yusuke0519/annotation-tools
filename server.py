@@ -55,10 +55,10 @@ def upload():
         return render_template("results.html", msg=err_msg)
     if not allowed_prefix(file.filename.split('.')[0]):
         err_msg = """
-<pre>Error: The file prefix must be the same with video prefix
-I.e., the file name must be look like 'exp1-sub1.csv' or 'exp1-sub1.txt'
+<pre>Error: The file prefix {} must be the same with video prefix
+I.e., the file name must be looks like 'exp1_sub1_label.csv(or.txt)'
 </pre>
-"""
+""".format(file.filename.split('.')[0])
         return render_template("results.html", msg=err_msg)
 
     if file:

@@ -2,185 +2,222 @@
 from identifier import get_IDs_from_path
 import params
 
-config = {}
-config['N_COLUMNS'] = 4
-config['sep'] = ','
-config['header'] = 'labelname,start,stop,comment'
+import os
+import re
 
-# err_range[0] is acceptable error
-# err_range[1] is un-acceptable error
-err_range = [123456, 123412345]
+CONFIG = {}
+# BASIC
+CONFIG["EMAIL"] = "iwasawa@weblab.t.u-tokyo.ac.jp"
+# VALIDATION RULES
+CONFIG['ACCEPTABLE_DISCREPARENCY'] = 1
+CONFIG['LIMIT_SAMPLE_LENGTH'] = 50
+# FORMAT OF LINES
+CONFIG["TIME_PATTERN"] = "\d\d:[0-5]\d:[0-2]\d"
+CONFIG["LINE_PATTERN"] = re.compile(
+    "(?P<code>\D+),(?P<start>{}),(?P<stop>{}),(?P<comment>[^,]*)$".format(
+        CONFIG["TIME_PATTERN"], CONFIG["TIME_PATTERN"])
+)
+
+# OTHER SORUCES
+CONFIG["META_DIR"] = os.path.dirname(__file__) + "/meta-data"
+CONFIG["LABEL_LIST_PATH"] = CONFIG["META_DIR"] + '/label_list.txt'
 
 
 class Checker(object):
     def __init__(self, path):
         self.path = path
-        prefix = path.split('/')[-1].split('.')[0]  # before the . of filename
+        prefix = path.split('/')[-1].split('.')[0].replace('_label', '')
         taskIDs = get_IDs_from_path(prefix.split('.')[0])  # before the .
         self.taskIDs = taskIDs
-        self.contents = self._load_file(path)  # the list of string (each line)
+        self.test_lines = self._load_file(path)
 
         # Init the results variable
         self.results = Results(taskIDs)
-
-        # Prepare correct data
-        self.correct_data = self._load_correctly_labeled_data()
+        # Prepare label list
+        self.label_list = open(CONFIG["LABEL_LIST_PATH"]).read().split('\n')
 
     def check(self):
         print("Start checking...")
-        for i, line in enumerate(self.contents):
-            self._check_eachline(i, line)
-        # self.check_miss_labels(error_list)
-        # print("Done")
+        parsed_test_lines_with_fstatus = self.parse_lines(self.test_lines)
+
+        # 1. Using only submitted file
+        for i, p_line in enumerate(parsed_test_lines_with_fstatus):
+            self._validate_eachline(i, p_line)
+
+        # 2. Using prepared file
+        self.compare_with_correct_data(parsed_test_lines_with_fstatus)
+        print("Done")
+
+    def parse_lines(self, lines):
+        def parse_line(i, line, key='format_status'):
+            match_obj = CONFIG["LINE_PATTERN"].search(line)
+            if match_obj is None:
+                return {key: params.ERROR, 'raw': line}
+            line_dict = match_obj.groupdict()
+            line_dict[key] = params.DONE
+            line_dict['raw'] = line
+            line_dict['start'] = convert_timeexpression(line_dict['start'])
+            line_dict['stop'] = convert_timeexpression(line_dict['stop'])
+            return line_dict
+        return [parse_line(i, line) for i, line in enumerate(lines)]
+
+    def compare_with_correct_data(self, p_data):
+        """ Check two things
+
+        1. Check if the time is correct or not
+        2. Check if all label were included in submitted file
+        """
+        # 0. Init
+        correct_data = self._load_correct_data()
+        if correct_data is None:  # check if the correct data is exist
+            return True
+        p_correct_data = self.parse_lines(correct_data)
+        # 1. Check if the time is correct or not
+        for i, p_line in enumerate(p_data):
+            self.validate_with_nearest_correct_line(i, p_line, p_correct_data)
+
+        # 2. Check if all label were included in submitted file
+        discreparencies = self.get_min_discreparencies(p_data, p_correct_data)
+        print(discreparencies['stop'])
+
+        for p_correct_line, start_disc, stop_disc in zip(
+                p_correct_data, discreparencies['start'],
+                discreparencies['stop']):
+            if start_disc >= CONFIG['LIMIT_SAMPLE_LENGTH']:
+                message = "You might missed {code} around ({start}, {stop})".format(
+                    code=p_correct_line['code'],
+                    start=int(p_correct_line['start']),
+                    stop=int(p_correct_line['stop'])
+                )
+                self.results.append((-1, 'ALL lines', params.ERROR, message))
+
+    def get_min_discreparencies(self, p_data, p_correct_data):
+        # to store the current minimum discreparency of p_correct_data
+
+        def minimum_discreparency(key):
+            _min_disc = [
+                CONFIG['LIMIT_SAMPLE_LENGTH']] * len(p_correct_data)
+            for i, p_correct_line in enumerate(p_correct_data):
+                for j, p_line in enumerate(p_data):
+                    if p_line['format_status'] is params.DONE:
+                        if p_line['code'] == p_correct_line['code']:
+                            ij_discreparency = abs(
+                                p_line[key] - p_correct_line[key])
+                            _min_disc[i] = min(
+                                _min_disc[i],
+                                ij_discreparency
+                            )
+            return _min_disc
+
+        return {
+            'start': minimum_discreparency('start'),
+            'stop': minimum_discreparency('stop'),
+            }
 
     def _load_file(self, path):
-        return open(path).read().split('\n')
+        return open(path).read().split('\n')[:-1]
 
-    def _check_eachline(self, i, line):
-        self.line_format_check(i, line)
+    def _load_correct_data(self):
+        """ Load correct data correspond to the file
 
-    def line_format_check(self, i, line):
-        # do somevalidation (I think generator strategy would be work here)
-        # e.g.
-        # 1. the number of columns
-        # 2. the format of time
-        # 3. fin time - start time
+        Output:
+            data: np.array or None
+                return None if there is no corresponding file
+        """
+        # convert to correct path
+        # exp1-sub1-label.csv(or.txt) <-> exp1-sub1-correct.csv
+        correct_path = self.path.replace(
+            "label", "correct").replace(".txt", ".csv")
+        correct_path = correct_path.replace(
+            os.path.dirname(correct_path), CONFIG["META_DIR"]
+        )
+        print(correct_path)
+        if os.path.exists(correct_path):
+            return open(correct_path).read().split('\n')[:-1]
+        else:
+            return None
 
-        # Heare is example of 1. the number of columns
-        # TODO: May by you need to separete each validation on other file
-        # so that we can easily call it (and keep the source simple)
+    def _validate_eachline(self, i, p_line):
+        """ Check if the line format is valid or not
 
-        # nb_cols = len(temp_line)
-        # if nb_cols != config["N_COLUMNS"]:
-        #     message = "#column should be %d, detected %d" % (
-        #         config["N_COLUMNS"], nb_cols)
-        #     self.results.append((i, line, params.ERROR, message))
-
-        # check the format of columns
-        if ',,' in line:
-            message = "[,,] changes [,]"
-            self.results.append((i, line, params.ERROR, message))
-            return False
-        if ',,,' in line:
-            message = "[,,,] changes [,]"
-            self.results.append((i, line, params.ERROR, message))
-            return False
-
-        temp_line = line.split(',')
-
-        # check the number of columns
-        if not len(temp_line) in [3, 4, 5]:
-            message = "#column should be %d, detected %d" % (
-                config["N_COLUMNS"], len(temp_line))
-            self.results.append((i, line, params.ERROR, message))
+        1. Check the format
+        2. Check the diff between (start, stop)
+        3. Check the code is in the list
+        """
+        # 1. Check the format
+        if p_line['format_status'] == params.ERROR:
+            message = "Invalid line syntax: "
+            message += "Please be sure that the line looks like"
+            message += " '{code},{start},{stop},{comment}'"
+            self.results.append((i, p_line['raw'], params.ERROR, message))
             return False
 
-        # check the format of time
-        check_tag, temp_line = self.split_line(i, line)
-        if check_tag:
+        # 2. Check the diff between (start, stop)
+        if p_line['start'] > p_line['stop']:
+            message = "Start time must be ealier than stop time"
+            self.results.append((i, p_line['raw'], params.ERROR, message))
             return False
 
-        # check difference between fin time and start time
-        if float(temp_line[1]) >= float(temp_line[2]):
-            message = "start time is later stop time"
-            self.results.append((i, line, params.ERROR, message))
+        # 3. Check the code is in the list
+        if p_line['code'] not in self.label_list:
+            message = "Label name error:"
+            message += "label name {} is not in the list".format(
+                p_line['code'])
+            self.results.append((i, p_line['raw'], params.ERROR, message))
             return False
+
         return True
 
-    def compatible_validation_with_correct_labeles(self, i, line, error_list):
+    def validate_with_nearest_correct_line(self, i, line, p_correct_data):
         #
         # 1. check missing an action
-        # 2. check difference between test label's time and correct label's time
+        # 2. check difference between
+        #      test label's time and correct label's time
         #
-        start_errors = []
-        finish_errors = []
-        check_start = False  # initialize start time's big error tag
-        check_finish = False  # initialize finish time's big error tag
+        start_errors = [CONFIG['LIMIT_SAMPLE_LENGTH']]
+        stop_errors = [CONFIG['LIMIT_SAMPLE_LENGTH']]
 
-        check_tag, temp_line = self.split_line(i, line)
+        if line['format_status'] == params.ERROR:
+            return None
+        name = line['code']
+        start = line['start']
+        stop = line['stop']
 
-        for correct_i, correct_line in enumerate(self.correct_data):
-            check_tag, temp_correct_line = self.split_line(correct_i, correct_line)
-            if temp_line[0] == temp_correct_line[0]:
-                start_error = temp_line[1] - temp_correct_line[1]
+        for correct_i, correct_line in enumerate(p_correct_data):
+            correct_name = correct_line['code']
+            correct_start = correct_line['start']
+            correct_stop = correct_line['stop']
+            if name == correct_name:
+                start_error = start - correct_start
                 start_errors.append(start_error)
-                finish_error = temp_line[2] - temp_correct_line[2]
-                finish_errors.append(finish_error)
-                if abs(error_list[correct_i][1]) > abs(start_error):
-                    # update error_list to minimum value
-                    error_list[correct_i][0] = i
-                    error_list[correct_i][1] = start_error
-                    error_list[correct_i][2] = line
-
-        start_errors = np.array(start_errors)
-        finish_errors = np.array(finish_errors)
-
-        min_abs_time = min(abs(start_errors))
-        if err_range[0] < min_abs_time < err_range[1]:
-            message = "#start time may be later than %f second" % err_range[0]
-        elif err_range[1] < min_abs_time:
-            check_start = True
-
-        min_abs_time = min(abs(finish_errors))
-        if err_range[0] < min_abs_time < err_range[1]:
-            message = "#finish time may be later than %f second" % err_range[0]
-        elif (err_range[1] < min_abs_time):
-            check_finish = True
-
-        if check_start:
-            if check_finish:
-                message = "#this action is nothing"
-                self.results.append((i, line, params.ERROR, message))
+                stop_error = stop - correct_stop
+                stop_errors.append(stop_error)
             else:
-                message = "#start time is absolutely different"
-                self.results.append((i, line, params.WARNING, message))
-        elif check_finish:
-            message = "#finish time is absolutely different"
-            self.results.append((i, line, params.WARNING, message))
-        return error_list
+                print(name, correct_name)
 
-    def _load_correctly_labeled_data(self):
-        pass
-        # return open(correct_path).read().split('\n')
-        # raise Exception("The method is not implemented yet")
-
-    def check_miss_labels(self, error_list):
-        for error in error_list:
-            if err_range[1] < abs(error[1]):
-                if error[1] <= 0:
-                    message = 'you missed a action before %0.3f second from this start time'%abs(error[1])
-                    self.results.append((error[0], error[2], params.WARNING, message))
-                else:
-                    message = 'you missed a action after %0.3f second from this start time'%abs(error[1])
-                    self.results.append((error[0], error[2], params.WARNING, message))
-
-    def convert_timeexpression(self, time):
-        # >>> time = '1:0:0'
-        # >>> convert_timeexpression(time)
-        # 60.0
-        # >>> time = '0:0:30'
-        # >>> convert_timeexpression(time)
-        # 1.0
-        m = int(time.split(':')[0])
-        s = int(time.split(':')[1])
-        f = int(time.split(':')[2])
-        return m * 60 + s + f / 30.0  # do not divide by 30
-
-    def split_line(self, i, line):
-        line = line.split(',')
-        if (len(line[1]) != 8) or (line[1].count(":") != 2):
-            message = "the format of start time must be mm:ss:ff"
-            self.results.append((i, line, params.ERROR, message))
-            return True, line
-        if (len(line[2]) != 8) or (line[2].count(":") != 2):
-            message = "the format of finish time must be mm:ss:ff"
-            self.results.append((i, line, params.ERROR, message))
-            return True, line
-        line[1] = self.convert_timeexpression(line[1])
-        line[2] = self.convert_timeexpression(line[2])
-        return False, line
+        min_abs_time = min(map(abs, start_errors))
+        if CONFIG['ACCEPTABLE_DISCREPARENCY'] < min_abs_time:
+            message = "Start time might be slightly different!"
+            message += " Please check the line again."
+            self.results.append((i, line['raw'], params.WARNING, message))
+        min_abs_time = min(map(abs, stop_errors))
+        if CONFIG['ACCEPTABLE_DISCREPARENCY'] < min_abs_time:
+            message = "Start time might be slightly different!"
+            message += " Please check the line again."
+            self.results.append((i, line['raw'], params.WARNING, message))
 
 
+def convert_timeexpression(time_string, frame_rate=30.0):
+    # >>> time = '1:0:0'
+    # >>> convert_timeexpression(time)
+    # 60.0
+    # >>> time = '0:0:30'
+    # >>> convert_timeexpression(time)
+    # 1.0
+    m = int(time_string.split(':')[0])
+    s = int(time_string.split(':')[1])
+    f = int(time_string.split(':')[2])
+    return m * 60 + s + f / float(frame_rate)
 
 
 class Results(object):

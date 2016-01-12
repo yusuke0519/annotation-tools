@@ -84,10 +84,11 @@ def get_filename(expID, userID):
 
 
 def get_IDs_from_path(path):
-    return [x for x in path.replace("exp", "").replace("sub", "").split("-")]
+    return [x for x in path.replace("exp", "").replace("sub", "").split("_")]
 
 
 def allowed_prefix(prefix):
+    prefix = prefix.replace('_label', '')
     flag = True
     IDs = get_IDs_from_path(prefix)
     if len(IDs) != 2:
