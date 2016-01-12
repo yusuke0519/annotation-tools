@@ -1,7 +1,6 @@
 # # -*- coding: utf-8 -*-
 from identifier import get_IDs_from_path
 import params
-import numpy as np
 
 config = {}
 config['N_COLUMNS'] = 4
@@ -11,7 +10,6 @@ config['header'] = 'labelname,start,stop,comment'
 # err_range[0] is acceptable error
 # err_range[1] is un-acceptable error
 err_range = [123456, 123412345]
-correct_path = 'exp1-sub9.txt'
 
 
 class Checker(object):
@@ -30,21 +28,16 @@ class Checker(object):
 
     def check(self):
         print("Start checking...")
-        error_list = np.ones((len(self.correct_data), 3)) * 1000
-        error_list = error_list.tolist()
         for i, line in enumerate(self.contents):
-            error_list = self._check_eachline(i, line, error_list)
-        self.check_miss_labels(error_list)
-        print("Done")
+            self._check_eachline(i, line)
+        # self.check_miss_labels(error_list)
+        # print("Done")
 
     def _load_file(self, path):
         return open(path).read().split('\n')
 
-    def _check_eachline(self, i, line, error_list):
-        check_tag = self.line_format_check(i, line)
-        if check_tag:
-                    error_list = self.compatible_validation_with_correct_labeles(i, line, error_list)
-        return error_list
+    def _check_eachline(self, i, line):
+        self.line_format_check(i, line)
 
     def line_format_check(self, i, line):
         # do somevalidation (I think generator strategy would be work here)
@@ -147,7 +140,8 @@ class Checker(object):
         return error_list
 
     def _load_correctly_labeled_data(self):
-        return open(correct_path).read().split('\n')
+        pass
+        # return open(correct_path).read().split('\n')
         # raise Exception("The method is not implemented yet")
 
     def check_miss_labels(self, error_list):
