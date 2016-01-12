@@ -4,6 +4,7 @@ import params
 
 import os
 import re
+import codecs
 
 CONFIG = {}
 # BASIC
@@ -12,7 +13,7 @@ CONFIG["EMAIL"] = "iwasawa@weblab.t.u-tokyo.ac.jp"
 CONFIG['ACCEPTABLE_DISCREPARENCY'] = 1
 CONFIG['LIMIT_SAMPLE_LENGTH'] = 50
 # FORMAT OF LINES
-CONFIG["TIME_PATTERN"] = "\d\d:[0-5]\d:[0-2]\d"
+CONFIG["TIME_PATTERN"] = "\d{1,2}:[0-5]\d:[0-2]\d"
 CONFIG["LINE_PATTERN"] = re.compile(
     "(?P<code>\D+),(?P<start>{}),(?P<stop>{}),(?P<comment>[^,]*)$".format(
         CONFIG["TIME_PATTERN"], CONFIG["TIME_PATTERN"])
@@ -115,7 +116,7 @@ class Checker(object):
             }
 
     def _load_file(self, path):
-        return open(path).read().split('\n')[:-1]
+        return codecs.open(path, 'r', 'shift-jis').read().split('\n')[:-1]
 
     def _load_correct_data(self):
         """ Load correct data correspond to the file
@@ -243,7 +244,8 @@ Please send a final version to iwasawa@weblab.t.u-tokyo.ac.jp.
 
     def _format_line(self, line):
         return "{status} (at line {i}, {content}): {message}".format(
-            status=line[2], message=line[3], i=line[0], content=line[1])
+            status=line[2], message=line[3], i=line[0], content=line[1].encode('utf-8')
+        ).decode('utf-8')
 
 
 if __name__ == '__main__':
