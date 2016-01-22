@@ -22,6 +22,7 @@ CONFIG["LINE_PATTERN"] = re.compile(
 # OTHER SORUCES
 CONFIG["META_DIR"] = os.path.dirname(__file__) + "/meta-data"
 CONFIG["LABEL_LIST_PATH"] = CONFIG["META_DIR"] + '/label_list.txt'
+CONFIG["LABEL_DICT"] = CONFIG["META_DIR"] + '/labeling_rule.tsv'
 
 
 class Checker(object):
@@ -36,6 +37,8 @@ class Checker(object):
         self.results = Results(taskIDs)
         # Prepare label list
         self.label_list = open(CONFIG["LABEL_LIST_PATH"]).read().split('\n')
+        # Dict for abbr.label name
+        self.label_dict = self.load_labelrule_dict(CONFIG["LABEL_DICT"])
 
     def check(self):
         print("Start checking...")
@@ -101,7 +104,8 @@ class Checker(object):
             for i, p_correct_line in enumerate(p_correct_data):
                 for j, p_line in enumerate(p_data):
                     if p_line['format_status'] is params.DONE:
-                        if p_line['code'] == p_correct_line['code']:
+                        if self.label_dict[self.p_line[
+                                'code']] == self.label_dict[p_correct_line['code']]:
                             ij_discreparency = abs(
                                 p_line[key] - p_correct_line[key])
                             _min_disc[i] = min(
@@ -113,7 +117,7 @@ class Checker(object):
         return {
             'start': minimum_discreparency('start'),
             'stop': minimum_discreparency('stop'),
-            }
+        }
 
     def _load_file(self, path):
         return codecs.open(path, 'r', 'shift-jis').read().split('\n')[:-1]
@@ -180,12 +184,12 @@ class Checker(object):
 
         if line['format_status'] == params.ERROR:
             return None
-        name = line['code']
+        name = self.label_dict[line['code']]
         start = line['start']
         stop = line['stop']
 
         for correct_i, correct_line in enumerate(p_correct_data):
-            correct_name = correct_line['code']
+            correct_name = self.label_dict[correct_line['code']]
             correct_start = correct_line['start']
             correct_stop = correct_line['stop']
             if name == correct_name:
@@ -207,6 +211,10 @@ class Checker(object):
             message += " Please check the line again."
             self.results.append((i, line['raw'], params.WARNING, message))
 
+    def load_labelrule_dict(self, rute):
+        label_dict = dict([line.rstrip().split("\t") for line in codecs.open(
+            rute, "r", "utf-8")])
+        return label_dict
 
 def convert_timeexpression(time_string, frame_rate=30.0):
     # >>> time = '1:0:0'
