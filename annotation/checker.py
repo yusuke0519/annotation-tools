@@ -20,9 +20,9 @@ CONFIG["LINE_PATTERN"] = re.compile(
 )
 
 # OTHER SORUCES
-CONFIG["META_DIR"] = os.path.dirname(__file__) + "/meta-data"
-CONFIG["LABEL_LIST_PATH"] = CONFIG["META_DIR"] + '/label_list.txt'
-CONFIG["LABEL_DICT"] = CONFIG["META_DIR"] + '/labeling_rule.tsv'
+CONFIG["META_DIR"] = os.path.join(os.path.dirname(__file__), "meta-data")
+CONFIG["LABEL_LIST_PATH"] = os.path.join(CONFIG["META_DIR"], 'label_list.txt')
+CONFIG["LABEL_DICT"] = os.path.join(CONFIG["META_DIR"], '/labeling_rule.tsv')
 
 
 class Checker(object):
@@ -38,7 +38,7 @@ class Checker(object):
         # Prepare label list
         self.label_list = open(CONFIG["LABEL_LIST_PATH"]).read().split('\n')
         # Dict for abbr.label name
-        self.label_dict = self.load_labelrule_dict(CONFIG["LABEL_DICT"])
+        # self.label_dict = self.load_labelrule_dict(CONFIG["LABEL_DICT"])
 
     def check(self):
         print("Start checking...")
@@ -49,7 +49,7 @@ class Checker(object):
             self._validate_eachline(i, p_line)
 
         # 2. Using prepared file
-        self.compare_with_correct_data(parsed_test_lines_with_fstatus)
+        # self.compare_with_correct_data(parsed_test_lines_with_fstatus)
         print("Done")
 
     def parse_lines(self, lines):
@@ -265,4 +265,4 @@ if __name__ == '__main__':
 
     document = Checker(args.path)
     document.check()
-    print document.results.as_string()
+    print document.results.as_string(lfc='\n')
